@@ -81,6 +81,7 @@
 #define DEFAULT_ENCODE_NUMBER_PRECISION 14
 #define DEFAULT_ENCODE_EMPTY_TABLE_AS_OBJECT 1
 #define DEFAULT_DECODE_ARRAY_WITH_ARRAY_MT 0
+#define DEFAULT_DECODE_UNICODE_ESCAPE 1
 
 #ifdef DISABLE_INVALID_NUMBERS
 #undef DEFAULT_DECODE_INVALID_NUMBERS
@@ -159,6 +160,7 @@ typedef struct {
     int decode_invalid_numbers;
     int decode_max_depth;
     int decode_array_with_array_mt;
+    int decode_unicode_escape;
 } json_config_t;
 
 typedef struct {
@@ -350,6 +352,16 @@ static int json_cfg_decode_array_with_array_mt(lua_State *l)
     return 1;
 }
 
+/* Configures whether we should decode unicode escape characters */
+static int json_cfg_decode_unicode_escape(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    json_enum_option(l, 1, &cfg->decode_unicode_escape, NULL, 1);
+
+    return 1;
+}
+
 /* Configures JSON encoding buffer persistence */
 static int json_cfg_encode_keep_buffer(lua_State *l)
 {
@@ -442,6 +454,7 @@ static void json_create_config(lua_State *l)
     cfg->encode_number_precision = DEFAULT_ENCODE_NUMBER_PRECISION;
     cfg->encode_empty_table_as_object = DEFAULT_ENCODE_EMPTY_TABLE_AS_OBJECT;
     cfg->decode_array_with_array_mt = DEFAULT_DECODE_ARRAY_WITH_ARRAY_MT;
+    cfg->decode_unicode_escape = DEFAULT_DECODE_UNICODE_ESCAPE;
 
 #if DEFAULT_ENCODE_KEEP_BUFFER > 0
     strbuf_init(&cfg->encode_buf, 0);
@@ -914,6 +927,12 @@ static int json_append_unicode_escape(json_parse_t *json)
     int surrogate_low;
     int len;
     int escape_len = 6;
+
+    if (!json->cfg->decode_unicode_escape) {
+        strbuf_append_mem_unsafe(json->tmp, json->ptr, 2);
+        json->ptr += 2;
+        return 0;
+    }
 
     /* Fetch UTF-16 code unit */
     codepoint = decode_hex4(json->ptr + 2);
@@ -1450,6 +1469,7 @@ static int lua_cjson_new(lua_State *l)
         { "decode", json_decode },
         { "encode_empty_table_as_object", json_cfg_encode_empty_table_as_object },
         { "decode_array_with_array_mt", json_cfg_decode_array_with_array_mt },
+        { "decode_unicode_escape", json_cfg_decode_unicode_escape }, 
         { "encode_sparse_array", json_cfg_encode_sparse_array },
         { "encode_max_depth", json_cfg_encode_max_depth },
         { "decode_max_depth", json_cfg_decode_max_depth },
